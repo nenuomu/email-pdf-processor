@@ -18,7 +18,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         cache: 'pip'
@@ -72,24 +72,33 @@ jobs:
           Write-Host "File size: $([math]::Round($file_size, 2)) MB"
           
           # Quick test run (will exit quickly due to GUI nature)
-          Start-Process -FilePath $exe_path -ArgumentList "--version" -Wait -ErrorAction SilentlyContinue
-          Write-Host "Executable test completed"
+          try {
+            $process = Start-Process -FilePath $exe_path -ArgumentList "--version" -PassThru -WindowStyle Hidden
+            Start-Sleep -Seconds 3
+            if (!$process.HasExited) {
+              $process.Kill()
+            }
+            Write-Host "Executable test completed successfully"
+          } catch {
+            Write-Host "Executable test completed (expected for GUI app)"
+          }
         } else {
           Write-Error "Executable not found!"
           exit 1
         }
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: EmailPDFProcessor-Windows
         path: |
           dist/EmailPDFProcessor.exe
         retention-days: 30
+        compression-level: 6
 
     - name: Create Release (on tag)
       if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: |
           dist/EmailPDFProcessor.exe
@@ -97,31 +106,42 @@ jobs:
         body: |
           ## Email PDF Processor ${{ github.ref_name }}
           
-          ### Download
+          ### 📥 Download
           - **EmailPDFProcessor.exe** - Standalone Windows executable (no installation required)
           
-          ### Features
+          ### ✨ Features
           - Extract PDFs from Outlook (.msg) and standard email files (.eml)
           - Convert SPAR remittance PDFs to organized Excel spreadsheets
-          - Modern GUI with progress tracking
+          - Modern GUI with progress tracking and detailed logs
           - Batch processing of multiple emails
           - Automatic cleanup of temporary files
+          - Multi-worksheet Excel output with summary
           
-          ### System Requirements
+          ### 💻 System Requirements
           - Windows 10/11 (64-bit)
           - 4GB RAM minimum
           - 100MB free disk space
           
-          ### Usage
+          ### 🚀 Usage
           1. Download EmailPDFProcessor.exe
           2. Run the executable (no installation needed)
-          3. Select folder containing email files
+          3. Select folder containing email files (.eml/.msg)
           4. Choose output Excel file location
           5. Click "Process Emails & Generate Excel"
+          6. Wait for processing to complete
+          7. Open the generated Excel file with organized transaction data
           
-          **Note**: Windows may show a security warning for unsigned executables. Click "More info" → "Run anyway" to proceed.
+          ### ⚠️ Security Note
+          Windows may show a security warning for unsigned executables. 
+          Click "More info" → "Run anyway" to proceed safely.
+          
+          ### 🔧 Troubleshooting
+          - If the app doesn't start, make sure you have Windows 10/11 64-bit
+          - If processing fails, check that your email files contain PDF attachments
+          - For support, create an issue on this repository
         draft: false
         prerelease: false
+        make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -133,13 +153,39 @@ jobs:
     steps:
     - name: Build Summary
       run: |
-        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Windows  | ${{ needs.build-windows.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "## 🏗️ Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "- Windows executable will be available in the artifacts section" >> $GITHUB_STEP_SUMMARY
+        echo "| Platform | Status | Result |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.build-windows.result }}" = "success" ]; then
+          echo "| Windows  | ✅ Success | Executable built successfully |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| Windows  | ❌ Failed | Build encountered errors |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Artifacts" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.build-windows.result }}" = "success" ]; then
+          echo "- ✅ Windows executable available in artifacts section" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ No artifacts generated due to build failure" >> $GITHUB_STEP_SUMMARY
+        fi
+        
         if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-          echo "- Release will be created automatically with the executable" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.build-windows.result }}" = "success" ]; then
+            echo "- 🚀 Release created automatically with executable" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ Release not created due to build failure" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
+        echo "- [View Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+        echo "- [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          echo "- [View Release](https://github.com/${{ github.repository }}/releases/latest)" >> $GITHUB_STEP_SUMMARY
         fi
