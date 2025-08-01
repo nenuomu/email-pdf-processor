@@ -44,10 +44,10 @@ def check_requirements():
     for package in required_packages:
         try:
             __import__(package.replace("-", "_"))
-            print(f"✓ {package}")
+            print(f"[OK] {package}")
         except ImportError:
             missing_packages.append(package)
-            print(f"✗ {package} - MISSING")
+            print(f"[MISSING] {package}")
     
     if missing_packages:
         print(f"\nMissing packages: {', '.join(missing_packages)}")
@@ -129,9 +129,9 @@ def build_executable():
     
     # Add version info (Windows only)
     if sys.platform == "win32":
-        cmd.extend([
-            "--version-file=build_scripts/version_info.txt"
-        ])
+        version_file = project_root / "build_scripts" / "version_info.txt"
+        if version_file.exists():
+            cmd.extend(["--version-file", str(version_file)])
     
     print("\n" + "="*60)
     print("BUILDING EXECUTABLE")
@@ -156,7 +156,7 @@ def build_executable():
         exe_path = project_root / "dist" / "EmailPDFProcessor.exe"
         if exe_path.exists():
             file_size = exe_path.stat().st_size / (1024 * 1024)  # Size in MB
-            print(f"\n✅ SUCCESS!")
+            print(f"\n[SUCCESS] Build completed!")
             print(f"Executable created: {exe_path}")
             print(f"File size: {file_size:.1f} MB")
             
@@ -169,17 +169,17 @@ def build_executable():
                     text=True, 
                     timeout=10
                 )
-                print("✓ Executable test passed")
+                print("[OK] Executable test passed")
             except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-                print("⚠ Executable test completed (expected for GUI app)")
+                print("[OK] Executable test completed (expected for GUI app)")
             
             return True
         else:
-            print("❌ ERROR: Executable not found after build")
+            print("[ERROR] Executable not found after build")
             return False
             
     except subprocess.CalledProcessError as e:
-        print("❌ BUILD FAILED!")
+        print("[ERROR] BUILD FAILED!")
         print(f"Return code: {e.returncode}")
         print("\nSTDOUT:")
         print(e.stdout)
@@ -191,7 +191,7 @@ def build_executable():
         print("3. Try running the script directly first: python src/main.py")
         return False
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"[ERROR] Unexpected error: {e}")
         return False
 
 def create_version_info():
@@ -257,7 +257,7 @@ def main():
     
     # Check if we're in the right directory
     if not Path("src/main.py").exists():
-        print("❌ ERROR: Please run this script from the project root directory")
+        print("[ERROR] Please run this script from the project root directory")
         print("The directory should contain: src/main.py")
         print("Current directory:", os.getcwd())
         return False
@@ -281,7 +281,7 @@ def main():
     
     if success:
         print("\n" + "="*60)
-        print("🎉 BUILD COMPLETED SUCCESSFULLY!")
+        print("BUILD COMPLETED SUCCESSFULLY!")
         print("="*60)
         print("Your executable is ready at: dist/EmailPDFProcessor.exe")
         print("\nNext steps:")
@@ -291,7 +291,7 @@ def main():
         print("="*60)
     else:
         print("\n" + "="*60)
-        print("❌ BUILD FAILED")
+        print("BUILD FAILED")
         print("="*60)
         print("Please check the error messages above and fix the issues.")
     
