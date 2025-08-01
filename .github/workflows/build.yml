@@ -26,237 +26,280 @@ jobs:
     - name: Upgrade pip and install build tools
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        echo "Pip version:"
-        pip --version
-        echo "Python version:"
-        python --version
+        echo "Pip version: $(pip --version)"
+        echo "Python version: $(python --version)"
 
-    - name: Install all dependencies
+    - name: Install dependencies with explicit versions
       run: |
-        echo "Installing all dependencies..."
-        pip install pandas>=1.5.0
-        pip install pdfplumber>=0.7.0
-        pip install customtkinter>=5.0.0
-        pip install extract-msg>=0.44.0
-        pip install xlsxwriter>=3.0.0
-        pip install pyinstaller>=5.0.0
-        pip install pillow>=9.0.0
-        echo "All dependencies installed"
+        echo "Installing dependencies one by one..."
+        
+        echo "Installing pandas..."
+        pip install "pandas>=1.5.0"
+        
+        echo "Installing pdfplumber..."
+        pip install "pdfplumber>=0.7.0"
+        
+        echo "Installing customtkinter..."
+        pip install "customtkinter>=5.0.0"
+        
+        echo "Installing extract-msg (note: hyphen in package name)..."
+        pip install "extract-msg>=0.44.0"
+        
+        echo "Installing xlsxwriter..."
+        pip install "xlsxwriter>=3.0.0"
+        
+        echo "Installing pyinstaller..."
+        pip install "pyinstaller>=5.0.0"
+        
+        echo "Installing pillow for icon creation..."
+        pip install "pillow>=9.0.0"
+        
+        echo "All dependencies installed!"
 
-    - name: Verify PyInstaller command availability
+    - name: Verify extract-msg specifically
+      run: |
+        echo "Testing extract-msg installation specifically..."
+        python -c "
+        try:
+            import extract_msg
+            print('[SUCCESS] extract_msg imported successfully')
+            print(f'extract_msg version: {extract_msg.__version__ if hasattr(extract_msg, \"__version__\") else \"unknown\"}')
+        except ImportError as e:
+            print(f'[ERROR] Failed to import extract_msg: {e}')
+            print('Attempting to reinstall extract-msg...')
+            import subprocess
+            import sys
+            try:
+                subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--force-reinstall', 'extract-msg>=0.44.0'])
+                import extract_msg
+                print('[SUCCESS] extract_msg installed and imported after reinstall')
+            except Exception as e2:
+                print(f'[FAILED] Could not install extract-msg: {e2}')
+                raise
+        "
+
+    - name: Verify PyInstaller command
       run: |
         echo "Testing PyInstaller command..."
         pyinstaller --version
-        echo "PyInstaller command works!"
+        echo "PyInstaller is working!"
 
-    - name: Verify Python module imports
+    - name: Verify all Python modules
       run: |
-        echo "Verifying Python module imports..."
+        echo "Final verification of all Python modules..."
         python -c "
         import sys
         
-        # Modules that should be importable
-        importable_modules = {
-            'pandas': 'pandas',
-            'pdfplumber': 'pdfplumber', 
-            'customtkinter': 'customtkinter',
-            'extract_msg': 'extract-msg',
-            'xlsxwriter': 'xlsxwriter'
-        }
+        # Test all required modules
+        modules_to_test = [
+            ('pandas', 'pandas'),
+            ('pdfplumber', 'pdfplumber'), 
+            ('customtkinter', 'customtkinter'),
+            ('extract_msg', 'extract-msg'),  # Note: import name vs package name
+            ('xlsxwriter', 'xlsxwriter')
+        ]
         
-        # Command-line tools (not necessarily importable)
-        command_tools = ['pyinstaller']
+        all_good = True
         
-        missing_modules = []
-        
-        print('Testing importable modules:')
-        for display_name, import_name in importable_modules.items():
+        for import_name, package_name in modules_to_test:
             try:
-                __import__(import_name)
-                print(f'[OK] {display_name}')
+                module = __import__(import_name)
+                version = getattr(module, '__version__', 'unknown')
+                print(f'[OK] {package_name} (import: {import_name}) - version: {version}')
             except ImportError as e:
-                print(f'[MISSING] {display_name}: {e}')
-                missing_modules.append(display_name)
+                print(f'[ERROR] {package_name} (import: {import_name}) - {e}')
+                all_good = False
         
-        print(f'\\nTesting command-line tools:')
+        # Test command-line tools
         import subprocess
-        import os
+        try:
+            result = subprocess.run(['pyinstaller', '--version'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print(f'[OK] pyinstaller command - version: {result.stdout.strip()}')
+            else:
+                print('[ERROR] pyinstaller command failed')
+                all_good = False
+        except Exception as e:
+            print(f'[ERROR] pyinstaller command error: {e}')
+            all_good = False
         
-        for tool in command_tools:
-            try:
-                result = subprocess.run([tool, '--version'], 
-                                      capture_output=True, text=True, timeout=10)
-                if result.returncode == 0:
-                    print(f'[OK] {tool} command available')
-                else:
-                    print(f'[ERROR] {tool} command failed')
-                    missing_modules.append(tool)
-            except Exception as e:
-                print(f'[ERROR] {tool} command not found: {e}')
-                missing_modules.append(tool)
-        
-        if missing_modules:
-            print(f'\\nMissing components: {missing_modules}')
+        if not all_good:
+            print('Some dependencies are missing!')
             sys.exit(1)
         else:
-            print('\\nAll components verified successfully!')
+            print('\\nAll dependencies verified successfully!')
         "
 
-    - name: Show installed packages
+    - name: Show all installed packages
       run: |
-        echo "All installed packages:"
-        pip list | grep -E "(pandas|pdfplumber|customtkinter|extract-msg|xlsxwriter|pyinstaller|pillow)"
+        echo "Currently installed packages:"
+        pip list
 
-    - name: Create application icon (if not exists)
+    - name: Create application icon
       run: |
         python -c "
         import os
         from pathlib import Path
         
+        # Create assets directory
         assets_dir = Path('assets')
         assets_dir.mkdir(exist_ok=True)
         icon_path = assets_dir / 'icon.ico'
         
         if not icon_path.exists():
-            print('Creating default icon...')
+            print('Creating application icon...')
             try:
                 from PIL import Image, ImageDraw, ImageFont
-                # Create a simple icon
-                img = Image.new('RGBA', (64, 64), (70, 130, 180, 255))
-                draw = ImageDraw.Draw(img)
-                # Draw background
-                draw.rectangle([8, 8, 56, 56], fill=(255, 255, 255, 255), outline=(70, 130, 180, 255), width=2)
-                # Draw text
-                try:
-                    # Try to use a system font
-                    font = ImageFont.truetype('arial.ttf', 14)
-                except:
-                    font = ImageFont.load_default()
                 
-                # Calculate text position to center it
+                # Create a 64x64 icon with blue background
+                size = 64
+                img = Image.new('RGBA', (size, size), (70, 130, 180, 255))  # Steel blue
+                draw = ImageDraw.Draw(img)
+                
+                # Draw white document shape
+                doc_color = (255, 255, 255, 255)
+                margin = 8
+                draw.rectangle([margin, margin, size-margin, size-margin], 
+                             fill=doc_color, outline=(50, 100, 150, 255), width=2)
+                
+                # Draw fold in top-right corner
+                fold_size = 10
+                draw.polygon([
+                    (size-margin-fold_size, margin),
+                    (size-margin, margin+fold_size),
+                    (size-margin, margin)
+                ], fill=(200, 200, 200, 255))
+                
+                # Draw PDF text
+                try:
+                    font = ImageFont.truetype('arial.ttf', 16)
+                except:
+                    try:
+                        font = ImageFont.truetype('calibri.ttf', 16)
+                    except:
+                        font = ImageFont.load_default()
+                
                 text = 'PDF'
+                # Calculate text position
                 bbox = draw.textbbox((0, 0), text, font=font)
                 text_width = bbox[2] - bbox[0]
                 text_height = bbox[3] - bbox[1]
-                x = (64 - text_width) // 2
-                y = (64 - text_height) // 2
+                x = (size - text_width) // 2
+                y = (size - text_height) // 2 + 5
                 
                 draw.text((x, y), text, fill=(70, 130, 180, 255), font=font)
                 
-                # Save as ICO
+                # Save as ICO with multiple sizes
                 img.save(str(icon_path), format='ICO', sizes=[(64, 64), (32, 32), (16, 16)])
-                print('Created professional icon with PIL')
+                print(f'Created professional icon: {icon_path}')
+                
             except ImportError:
-                print('PIL not available, creating minimal icon')
-                # Create minimal valid ICO file
+                print('PIL not available, creating minimal icon...')
+                # Create minimal ICO file that won't cause errors
                 with open(icon_path, 'wb') as f:
-                    # Minimal ICO header for 16x16 icon
-                    f.write(bytes([
-                        0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10,
-                        0x00, 0x00, 0x01, 0x00, 0x20, 0x00, 0x68, 0x04,
-                        0x00, 0x00, 0x16, 0x00, 0x00, 0x00
-                    ]))
-                    # Add minimal bitmap data (transparent 16x16)
-                    f.write(b'\x00' * (16 * 16 * 4))  # 16x16 RGBA pixels
-                print('Created minimal icon file')
+                    # Simple ICO header for 16x16 icon
+                    ico_header = bytes([
+                        0x00, 0x00,  # Reserved
+                        0x01, 0x00,  # Type (ICO)
+                        0x01, 0x00,  # Number of images
+                        0x10, 0x10,  # Width, Height (16x16)
+                        0x00,        # Colors (0 = 256+)
+                        0x00,        # Reserved
+                        0x01, 0x00,  # Color planes
+                        0x20, 0x00,  # Bits per pixel (32-bit)
+                        0x68, 0x04, 0x00, 0x00,  # Size of image data
+                        0x16, 0x00, 0x00, 0x00   # Offset to image data
+                    ])
+                    f.write(ico_header)
+                    # Write 16x16 RGBA pixel data (blue background)
+                    pixel_data = bytes([70, 130, 180, 255] * (16 * 16))  # Blue pixels
+                    f.write(pixel_data)
+                print(f'Created minimal icon: {icon_path}')
+                
             except Exception as e:
-                print(f'Icon creation failed: {e}')
+                print(f'Icon creation error: {e}')
                 # Create empty file to prevent build errors
                 icon_path.touch()
+                print(f'Created placeholder icon: {icon_path}')
         else:
-            print('Icon file already exists')
+            print(f'Icon already exists: {icon_path}')
         "
 
-    - name: Display project structure
+    - name: Verify project structure
       run: |
         echo "Project structure:"
-        Get-ChildItem -Recurse -Name | Sort-Object
+        Get-ChildItem -Recurse -Name | Sort-Object | ForEach-Object { Write-Host "  $_" }
 
     - name: Build executable
       run: |
         echo "Starting build process..."
         echo "Current directory: $PWD"
-        echo "Checking build script exists..."
+        
+        # Verify build script exists
         if (Test-Path "build_scripts/build.py") {
-          echo "Build script found, executing..."
+          echo "Build script found, starting build..."
           python build_scripts/build.py
         } else {
           echo "ERROR: build_scripts/build.py not found!"
-          echo "Available files:"
-          Get-ChildItem -Recurse -Name | Where-Object { $_ -like "*.py" }
+          echo "Available Python files:"
+          Get-ChildItem -Recurse -Filter "*.py" | ForEach-Object { Write-Host "  $($_.FullName)" }
           exit 1
         }
 
-    - name: Verify build output
+    - name: Verify and test executable
       run: |
-        echo "Checking build output..."
-        if (Test-Path "dist") {
-          echo "SUCCESS: dist folder found"
-          echo "Contents of dist folder:"
-          Get-ChildItem dist -Recurse | Format-Table Name, Length, LastWriteTime -AutoSize
-          
-          $exe_path = "dist/EmailPDFProcessor.exe"
-          if (Test-Path $exe_path) {
-            $file_size = (Get-Item $exe_path).Length / 1MB
-            echo "SUCCESS: EmailPDFProcessor.exe found ($([math]::Round($file_size, 2)) MB)"
-          } else {
-            echo "ERROR: EmailPDFProcessor.exe not found in dist folder"
-            exit 1
-          }
-        } else {
-          echo "ERROR: dist folder not found!"
-          echo "Available directories:"
-          Get-ChildItem -Directory | Format-Table Name
-          echo "Build may have failed - check previous steps"
-          exit 1
-        }
-
-    - name: Test executable startup
-      run: |
+        echo "Verifying build results..."
+        
         $exe_path = "dist/EmailPDFProcessor.exe"
         
-        Write-Host "Testing executable: $exe_path"
-        
         if (Test-Path $exe_path) {
-          # Get file properties
-          $file_info = Get-ItemProperty $exe_path
-          Write-Host "File size: $([math]::Round($file_info.Length / 1MB, 2)) MB"
-          Write-Host "Created: $($file_info.CreationTime)"
-          Write-Host "Last modified: $($file_info.LastWriteTime)"
+          $file_info = Get-Item $exe_path
+          $size_mb = [math]::Round($file_info.Length / 1MB, 2)
           
-          # Test if executable can start (GUI apps typically exit quickly without parameters)
+          Write-Host "SUCCESS: Executable built successfully!"
+          Write-Host "Location: $exe_path"
+          Write-Host "Size: $size_mb MB"
+          Write-Host "Created: $($file_info.CreationTime)"
+          Write-Host "Modified: $($file_info.LastWriteTime)"
+          
+          # Basic executable test
           try {
-            Write-Host "Attempting to start executable..."
-            $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-            $startInfo.FileName = $exe_path
-            $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-            $startInfo.UseShellExecute = $false
-            
-            $process = [System.Diagnostics.Process]::Start($startInfo)
-            
-            # Wait a few seconds to see if it starts properly
-            Start-Sleep -Seconds 3
+            Write-Host "Testing executable startup..."
+            $process = Start-Process -FilePath $exe_path -PassThru -WindowStyle Hidden -ErrorAction Stop
+            Start-Sleep -Seconds 5
             
             if ($process.HasExited) {
-              Write-Host "[INFO] Process exited quickly (normal for GUI without parameters)"
-              Write-Host "Exit code: $($process.ExitCode)"
+              Write-Host "[OK] Process started and exited cleanly (exit code: $($process.ExitCode))"
             } else {
-              Write-Host "[SUCCESS] Process started and is running"
+              Write-Host "[OK] Process is running, terminating test..."
               $process.Kill()
-              Write-Host "Process terminated for testing purposes"
             }
             
-            Write-Host "[SUCCESS] Executable startup test completed successfully"
+            Write-Host "Executable test completed successfully!"
+            
           } catch {
-            Write-Host "[WARNING] Executable test encountered issue: $($_.Exception.Message)"
-            Write-Host "This may be normal for GUI applications"
+            Write-Host "Executable test warning: $($_.Exception.Message)"
+            Write-Host "(This may be normal for GUI applications)"
           }
+          
         } else {
-          Write-Error "CRITICAL: Executable not found at $exe_path"
+          Write-Error "CRITICAL ERROR: Executable not found!"
+          Write-Host "Contents of dist directory:"
+          if (Test-Path "dist") {
+            Get-ChildItem "dist" | Format-Table Name, Length, LastWriteTime
+          } else {
+            Write-Host "dist directory does not exist!"
+          }
+          
+          Write-Host "Contents of current directory:"
+          Get-ChildItem | Format-Table Name, Length, LastWriteTime
+          
           exit 1
         }
 
     - name: Upload build artifacts
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: EmailPDFProcessor-Windows-Build-${{ github.run_number }}
@@ -266,67 +309,63 @@ jobs:
         compression-level: 6
 
     - name: Create Release (on tag)
-      if: startsWith(github.ref, 'refs/tags/v')
+      if: startsWith(github.ref, 'refs/tags/v') && success()
       uses: softprops/action-gh-release@v2
       with:
         files: |
           dist/EmailPDFProcessor.exe
         name: Email PDF Processor ${{ github.ref_name }}
         body: |
-          ## 📧📄➡️📊 Email PDF Processor ${{ github.ref_name }}
+          ## 📧📄➡️📊 Email PDF to Excel Processor ${{ github.ref_name }}
           
-          ### 🎯 What This Tool Does
-          Automatically extracts PDF attachments from email files and converts SPAR remittance data into organized Excel spreadsheets.
+          **Transform your email PDF attachments into organized Excel spreadsheets with one click!**
           
-          ### 📥 Download & Install
-          1. **Download**: Click `EmailPDFProcessor.exe` below
-          2. **Save**: Put it anywhere on your computer (Desktop, Documents, etc.)
-          3. **Run**: Double-click to start - no installation needed!
+          ### 🎯 What It Does
+          - Extracts PDF attachments from Outlook (.msg) and email (.eml) files
+          - Converts SPAR remittance PDFs to structured Excel data
+          - Organizes transactions by store with proper categorization
+          - Creates multi-worksheet Excel files with summary reports
           
-          ### 🚀 How to Use
-          1. **Launch** the application
-          2. **Select** folder containing your email files (.eml or .msg files)
-          3. **Choose** where to save the Excel output file
-          4. **Click** "Process Emails & Generate Excel"
-          5. **Wait** for processing (progress bar shows status)
-          6. **Open** the generated Excel file to view organized data
+          ### 📥 Quick Start
+          1. **Download** `EmailPDFProcessor.exe` below
+          2. **Run** the file (no installation needed!)
+          3. **Select** your folder containing email files
+          4. **Choose** output location for Excel file
+          5. **Click** "Process Emails & Generate Excel"
+          6. **Done!** Open your organized Excel report
           
-          ### 📊 What You Get
-          - **Multi-worksheet Excel file** with each PDF on its own sheet
-          - **Summary sheet** showing processing results
-          - **Organized data**: Store, Date, Transaction Type, Description, Amount
-          - **SPAR-specific formatting** for remittance documents
-          
-          ### 💻 Requirements
-          - Windows 10 or 11 (64-bit)
+          ### 💻 System Requirements
+          - Windows 10/11 (64-bit) 
           - 4GB RAM minimum
-          - 100MB free disk space
-          - Email files with PDF attachments
+          - 100MB free space
           
-          ### ⚠️ Windows Security Notice
-          Windows may show "Windows protected your PC" warning for downloaded executables.
-          **This is normal and safe**:
-          1. Click "More info"
-          2. Click "Run anyway"
-          3. The app only reads email files and creates Excel files
+          ### 🛡️ Security Note
+          Windows may show a security warning. Click "More info" → "Run anyway" - the app is safe and only processes your files locally.
           
-          ### 🐛 Troubleshooting
-          - **Won't start**: Make sure you have Windows 10/11 64-bit
-          - **No PDFs found**: Check that emails contain PDF attachments
-          - **Processing fails**: Ensure PDFs are SPAR remittance documents
-          - **Slow processing**: Large files take time - this is normal
+          ### 🔧 Features
+          - ✅ Batch processing of multiple emails
+          - ✅ Progress tracking with detailed logs  
+          - ✅ Automatic temporary file cleanup
+          - ✅ Professional GUI interface
+          - ✅ SPAR-specific transaction categorization
+          - ✅ Multi-format support (.eml/.msg files)
           
-          ### 📝 Technical Details
-          - **Size**: ~50-80 MB (includes all dependencies)
-          - **Python**: Built with Python 3.11
-          - **Libraries**: pandas, pdfplumber, customtkinter, xlsxwriter
-          - **Format Support**: .eml (standard email), .msg (Outlook)
+          ### 📊 Output Format
+          Each Excel file contains:
+          - **Individual worksheets** for each processed PDF
+          - **Summary worksheet** with processing statistics
+          - **Organized columns**: Store, Date, Transaction Type, Description, Amount
+          - **Sorted data** by store and date for easy analysis
           
           ---
-          **Build Information**
+          
+          **Build Details:**
+          - Version: ${{ github.ref_name }}
           - Built: ${{ github.event.head_commit.timestamp }}
           - Commit: ${{ github.sha }}
           - Build #: ${{ github.run_number }}
+          
+          Need help? [Create an issue](https://github.com/${{ github.repository }}/issues) or check the README for troubleshooting tips.
         draft: false
         prerelease: false
         make_latest: true
@@ -341,47 +380,55 @@ jobs:
     steps:
     - name: Generate Build Summary
       run: |
-        echo "## 🏗️ Build Summary Report" >> $GITHUB_STEP_SUMMARY
+        echo "## 📋 Build Summary Report" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ needs.build-windows.result }}" = "success" ]; then
-          echo "### ✅ BUILD SUCCESSFUL" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎉 BUILD SUCCESSFUL!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🎉 **EmailPDFProcessor.exe has been built successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **EmailPDFProcessor.exe** has been built and tested successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**What was built:**" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Windows 64-bit executable" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ All dependencies included" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ GUI application with progress tracking" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ SPAR remittance PDF processing capability" >> $GITHUB_STEP_SUMMARY
+          echo "**What's included:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Windows 64-bit standalone executable" >> $GITHUB_STEP_SUMMARY
+          echo "- All Python dependencies bundled" >> $GITHUB_STEP_SUMMARY
+          echo "- Modern GUI with progress tracking" >> $GITHUB_STEP_SUMMARY
+          echo "- SPAR remittance processing capability" >> $GITHUB_STEP_SUMMARY
+          echo "- Professional application icon" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Next Steps:**" >> $GITHUB_STEP_SUMMARY
-          echo "1. 📦 Download from Artifacts section below" >> $GITHUB_STEP_SUMMARY
-          echo "2. 🧪 Test on your Windows computer" >> $GITHUB_STEP_SUMMARY
-          echo "3. 🏷️ Create a release tag (like v1.0.0) for public distribution" >> $GITHUB_STEP_SUMMARY
-        else
+          echo "**Ready for use:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. 📦 Download from artifacts below" >> $GITHUB_STEP_SUMMARY
+          echo "2. 🧪 Test on your Windows machine" >> $GITHUB_STEP_SUMMARY
+          echo "3. 🏷️ Create release tag (e.g., v1.0.0) for distribution" >> $GITHUB_STEP_SUMMARY
+          
+        elif [ "${{ needs.build-windows.result }}" = "failure" ]; then
           echo "### ❌ BUILD FAILED" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The build encountered errors. Common issues:" >> $GITHUB_STEP_SUMMARY
+          echo "The build process encountered errors." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Possible Causes:**" >> $GITHUB_STEP_SUMMARY
-          echo "- ❌ Missing or incorrect dependencies" >> $GITHUB_STEP_SUMMARY
-          echo "- ❌ Python code syntax errors" >> $GITHUB_STEP_SUMMARY
-          echo "- ❌ Missing source files (src/main.py)" >> $GITHUB_STEP_SUMMARY
-          echo "- ❌ PyInstaller configuration issues" >> $GITHUB_STEP_SUMMARY
+          echo "**Common issues to check:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Missing dependencies (pandas, pdfplumber, customtkinter, extract-msg, xlsxwriter)" >> $GITHUB_STEP_SUMMARY
+          echo "- Python syntax errors in source code" >> $GITHUB_STEP_SUMMARY
+          echo "- Missing source files (src/main.py, build_scripts/build.py)" >> $GITHUB_STEP_SUMMARY
+          echo "- PyInstaller configuration problems" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**How to Fix:**" >> $GITHUB_STEP_SUMMARY
-          echo "1. 🔍 Check the build logs above for specific errors" >> $GITHUB_STEP_SUMMARY
-          echo "2. 🛠️ Fix any identified code or configuration issues" >> $GITHUB_STEP_SUMMARY
-          echo "3. 🔄 Push your fixes to trigger a new build" >> $GITHUB_STEP_SUMMARY
+          echo "**Fix steps:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the detailed build logs above" >> $GITHUB_STEP_SUMMARY
+          echo "2. Fix identified issues in your code" >> $GITHUB_STEP_SUMMARY
+          echo "3. Commit and push changes to retry build" >> $GITHUB_STEP_SUMMARY
+          
+        else
+          echo "### ⏳ BUILD CANCELLED OR SKIPPED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The build was cancelled or skipped." >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔗 Useful Links" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
         echo "- [📋 Full Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
         echo "- [📦 Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
-        echo "- [📚 Repository](https://github.com/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
+        echo "- [🏠 Repository Home](https://github.com/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
+        echo "- [📚 Documentation](https://github.com/${{ github.repository }}#readme)" >> $GITHUB_STEP_SUMMARY
         
         if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-          echo "- [🚀 Latest Release](https://github.com/${{ github.repository }}/releases/latest)" >> $GITHUB_STEP_SUMMARY
+          echo "- [🚀 View Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
         fi
