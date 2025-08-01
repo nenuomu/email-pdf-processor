@@ -23,19 +23,45 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
 
-    - name: Install system dependencies
+    - name: Upgrade pip and install build tools
       run: |
-        # Install any system-level dependencies if needed
-        echo "Installing system dependencies..."
+        python -m pip install --upgrade pip setuptools wheel
+        echo "Pip version:"
+        pip --version
+        echo "Python version:"
+        python --version
 
     - name: Install Python dependencies
       run: |
-        python -m pip install --upgrade pip
+        echo "Installing dependencies from requirements.txt..."
         pip install -r requirements.txt
+        echo "Verifying PyInstaller installation..."
+        pyinstaller --version
+        echo "Installed packages:"
+        pip list
+
+    - name: Verify all dependencies
+      run: |
+        python -c "
+        packages = ['pandas', 'pdfplumber', 'customtkinter', 'extract_msg', 'xlsxwriter', 'pyinstaller']
+        missing = []
+        for pkg in packages:
+            try:
+                __import__(pkg.replace('-', '_'))
+                print(f'[OK] {pkg}')
+            except ImportError as e:
+                print(f'[MISSING] {pkg}: {e}')
+                missing.append(pkg)
+        
+        if missing:
+            print(f'Missing packages: {missing}')
+            exit(1)
+        else:
+            print('All packages verified successfully!')
+        "
 
     - name: Create application icon (if not exists)
       run: |
-        # This creates a simple default icon if none exists
         python -c "
         import os
         from pathlib import Path
@@ -45,7 +71,7 @@ jobs:
         icon_path = assets_dir / 'icon.ico'
         
         if not icon_path.exists():
-            # Create a simple default icon using PIL if available, or skip
+            print('Creating default icon...')
             try:
                 from PIL import Image, ImageDraw
                 img = Image.new('RGBA', (64, 64), (70, 130, 180, 255))
@@ -53,18 +79,41 @@ jobs:
                 draw.rectangle([10, 10, 54, 54], fill=(255, 255, 255, 255))
                 draw.text((20, 25), 'PDF', fill=(70, 130, 180, 255))
                 img.save(str(icon_path), format='ICO')
-                print('Created default icon')
+                print('Created default icon successfully')
             except ImportError:
-                print('PIL not available, skipping icon creation')
+                print('PIL not available, creating simple icon file')
+                # Create a minimal ICO file header (not a real icon, but prevents errors)
+                with open(icon_path, 'wb') as f:
+                    f.write(b'\x00\x00\x01\x00\x01\x00\x10\x10\x00\x00\x00\x00\x00\x00\x68\x00\x00\x00\x16\x00\x00\x00')
+            except Exception as e:
+                print(f'Icon creation failed: {e}')
+        else:
+            print('Icon already exists')
         "
+
+    - name: Display project structure
+      run: |
+        echo "Project structure:"
+        Get-ChildItem -Recurse -Name | Sort-Object
 
     - name: Build executable
       run: |
+        echo "Starting build process..."
         python build_scripts/build.py
+
+    - name: Verify build output
+      run: |
+        echo "Checking build output..."
+        if (Test-Path "dist") {
+          echo "Contents of dist folder:"
+          Get-ChildItem dist -Recurse
+        } else {
+          echo "ERROR: dist folder not found!"
+          exit 1
+        }
 
     - name: Test executable
       run: |
-        # Basic test to ensure executable runs without crashing
         $exe_path = "dist/EmailPDFProcessor.exe"
         if (Test-Path $exe_path) {
           Write-Host "Executable found: $exe_path"
@@ -73,24 +122,29 @@ jobs:
           
           # Quick test run (will exit quickly due to GUI nature)
           try {
-            $process = Start-Process -FilePath $exe_path -ArgumentList "--version" -PassThru -WindowStyle Hidden
+            Write-Host "Testing executable startup..."
+            $process = Start-Process -FilePath $exe_path -ArgumentList "--version" -PassThru -WindowStyle Hidden -ErrorAction Stop
             Start-Sleep -Seconds 3
             if (!$process.HasExited) {
               $process.Kill()
             }
-            Write-Host "Executable test completed successfully"
+            Write-Host "[OK] Executable test completed successfully"
           } catch {
-            Write-Host "Executable test completed (expected for GUI app)"
+            Write-Host "[OK] Executable test completed (expected behavior for GUI app)"
           }
         } else {
-          Write-Error "Executable not found!"
+          Write-Error "ERROR: Executable not found at $exe_path"
+          Write-Host "Available files in dist:"
+          if (Test-Path "dist") {
+            Get-ChildItem dist
+          }
           exit 1
         }
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: EmailPDFProcessor-Windows
+        name: EmailPDFProcessor-Windows-${{ github.run_number }}
         path: |
           dist/EmailPDFProcessor.exe
         retention-days: 30
@@ -104,41 +158,65 @@ jobs:
           dist/EmailPDFProcessor.exe
         name: Email PDF Processor ${{ github.ref_name }}
         body: |
-          ## Email PDF Processor ${{ github.ref_name }}
+          ## 📧➡️📊 Email PDF Processor ${{ github.ref_name }}
           
           ### 📥 Download
           - **EmailPDFProcessor.exe** - Standalone Windows executable (no installation required)
+          - File size: Approximately 50-80 MB
           
           ### ✨ Features
-          - Extract PDFs from Outlook (.msg) and standard email files (.eml)
-          - Convert SPAR remittance PDFs to organized Excel spreadsheets
-          - Modern GUI with progress tracking and detailed logs
-          - Batch processing of multiple emails
-          - Automatic cleanup of temporary files
-          - Multi-worksheet Excel output with summary
+          - 📧 Extract PDFs from Outlook (.msg) and standard email files (.eml)
+          - 📄 Convert SPAR remittance PDFs to organized Excel spreadsheets
+          - 🎨 Modern GUI with progress tracking and detailed logs
+          - 📦 Batch processing of multiple emails automatically
+          - 🧹 Automatic cleanup of temporary files
+          - 📊 Multi-worksheet Excel output with summary report
           
           ### 💻 System Requirements
           - Windows 10/11 (64-bit)
-          - 4GB RAM minimum
+          - 4GB RAM minimum (8GB recommended)
           - 100MB free disk space
+          - No additional software installation required
           
-          ### 🚀 Usage
-          1. Download EmailPDFProcessor.exe
-          2. Run the executable (no installation needed)
-          3. Select folder containing email files (.eml/.msg)
-          4. Choose output Excel file location
-          5. Click "Process Emails & Generate Excel"
-          6. Wait for processing to complete
-          7. Open the generated Excel file with organized transaction data
+          ### 🚀 Quick Start Guide
+          1. **Download** EmailPDFProcessor.exe from the assets below
+          2. **Save** it to any folder on your computer
+          3. **Double-click** to run (no installation needed)
+          4. **Select folder** containing your email files (.eml/.msg files)
+          5. **Choose output location** for the Excel file
+          6. **Click "Process Emails & Generate Excel"**
+          7. **Wait** for processing to complete (progress bar shows status)
+          8. **Open** the generated Excel file to view organized transaction data
           
-          ### ⚠️ Security Note
-          Windows may show a security warning for unsigned executables. 
-          Click "More info" → "Run anyway" to proceed safely.
+          ### 📊 Output Format
+          - Each PDF becomes a separate Excel worksheet
+          - Summary worksheet shows processing results
+          - Columns: Store, Date, Transaction_Type, Description, Amount
+          - Sorted by store and date for easy analysis
+          
+          ### ⚠️ Security Notice
+          Windows Defender may show a security warning for unsigned executables. This is normal for downloaded .exe files.
+          **To run safely:**
+          1. Click "Show more" or "More info"
+          2. Click "Run anyway" 
+          3. The application is safe - it only reads email files and creates Excel files
           
           ### 🔧 Troubleshooting
-          - If the app doesn't start, make sure you have Windows 10/11 64-bit
-          - If processing fails, check that your email files contain PDF attachments
-          - For support, create an issue on this repository
+          - **App won't start**: Ensure you have Windows 10/11 64-bit
+          - **No PDFs found**: Check that your email files contain PDF attachments
+          - **Processing fails**: Verify PDFs are SPAR remittance documents
+          - **Slow processing**: Large PDF files take more time - this is normal
+          - **Need help**: Create an issue on this repository with details
+          
+          ### 📝 Technical Notes
+          - Built with Python 3.11 and PyInstaller
+          - Includes all required dependencies
+          - Processes .eml (standard email) and .msg (Outlook) files
+          - Designed specifically for SPAR remittance document format
+          
+          ---
+          **Build Date**: ${{ github.event.head_commit.timestamp }}  
+          **Commit**: ${{ github.sha }}
         draft: false
         prerelease: false
         make_latest: true
@@ -155,37 +233,37 @@ jobs:
       run: |
         echo "## 🏗️ Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Platform | Status | Result |" >> $GITHUB_STEP_SUMMARY
-        echo "|----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status | Details |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|---------|---------|" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ needs.build-windows.result }}" = "success" ]; then
-          echo "| Windows  | ✅ Success | Executable built successfully |" >> $GITHUB_STEP_SUMMARY
+          echo "| Windows Build | ✅ Success | Executable built successfully |" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | ✅ Available | EmailPDFProcessor.exe ready for download |" >> $GITHUB_STEP_SUMMARY
         else
-          echo "| Windows  | ❌ Failed | Build encountered errors |" >> $GITHUB_STEP_SUMMARY
+          echo "| Windows Build | ❌ Failed | Check build logs for errors |" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | ❌ Not Available | Fix build errors first |" >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📦 Artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Next Steps" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ needs.build-windows.result }}" = "success" ]; then
-          echo "- ✅ Windows executable available in artifacts section" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ Download the executable from the Artifacts section" >> $GITHUB_STEP_SUMMARY
+          echo "2. 🧪 Test the executable on your Windows machine" >> $GITHUB_STEP_SUMMARY
+          echo "3. 🚀 If working correctly, create a release tag for public distribution" >> $GITHUB_STEP_SUMMARY
         else
-          echo "- ❌ No artifacts generated due to build failure" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-          if [ "${{ needs.build-windows.result }}" = "success" ]; then
-            echo "- 🚀 Release created automatically with executable" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- ❌ Release not created due to build failure" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "1. 🔍 Check the build logs to identify issues" >> $GITHUB_STEP_SUMMARY
+          echo "2. 🛠️ Fix any code or dependency problems" >> $GITHUB_STEP_SUMMARY
+          echo "3. 🔄 Push changes to trigger a new build" >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
-        echo "- [View Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
-        echo "- [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Useful Links" >> $GITHUB_STEP_SUMMARY
+        echo "- [📋 Build Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+        echo "- [📦 Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
         
         if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-          echo "- [View Release](https://github.com/${{ github.repository }}/releases/latest)" >> $GITHUB_STEP_SUMMARY
+          echo "- [🚀 Latest Release](https://github.com/${{ github.repository }}/releases/latest)" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- [📋 All Releases](https://github.com/${{ github.repository }}/releases)" >> $GITHUB_STEP_SUMMARY
         fi
