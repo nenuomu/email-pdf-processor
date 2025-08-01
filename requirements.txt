@@ -1,6 +1,12 @@
+# Core dependencies for Email PDF Processor
 pandas>=1.5.0
 pdfplumber>=0.7.0
 customtkinter>=5.0.0
 extract-msg>=0.44.0
 xlsxwriter>=3.0.0
+
+# Build dependencies
 pyinstaller>=5.0.0
+
+# Optional dependencies (for icon creation)
+pillow>=9.0.0
