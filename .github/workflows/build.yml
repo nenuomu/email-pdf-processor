@@ -63,9 +63,10 @@ jobs:
         try:
             import extract_msg
             print('[SUCCESS] extract_msg imported successfully')
-            print(f'extract_msg version: {extract_msg.__version__ if hasattr(extract_msg, \"__version__\") else \"unknown\"}')
+            version = getattr(extract_msg, '__version__', 'unknown')
+            print('extract_msg version:', version)
         except ImportError as e:
-            print(f'[ERROR] Failed to import extract_msg: {e}')
+            print('[ERROR] Failed to import extract_msg:', str(e))
             print('Attempting to reinstall extract-msg...')
             import subprocess
             import sys
@@ -74,7 +75,7 @@ jobs:
                 import extract_msg
                 print('[SUCCESS] extract_msg installed and imported after reinstall')
             except Exception as e2:
-                print(f'[FAILED] Could not install extract-msg: {e2}')
+                print('[FAILED] Could not install extract-msg:', str(e2))
                 raise
         "
 
@@ -95,7 +96,7 @@ jobs:
             ('pandas', 'pandas'),
             ('pdfplumber', 'pdfplumber'), 
             ('customtkinter', 'customtkinter'),
-            ('extract_msg', 'extract-msg'),  # Note: import name vs package name
+            ('extract_msg', 'extract-msg'),
             ('xlsxwriter', 'xlsxwriter')
         ]
         
@@ -105,9 +106,9 @@ jobs:
             try:
                 module = __import__(import_name)
                 version = getattr(module, '__version__', 'unknown')
-                print(f'[OK] {package_name} (import: {import_name}) - version: {version}')
+                print('[OK]', package_name, '(import:', import_name + ') - version:', version)
             except ImportError as e:
-                print(f'[ERROR] {package_name} (import: {import_name}) - {e}')
+                print('[ERROR]', package_name, '(import:', import_name + ') -', str(e))
                 all_good = False
         
         # Test command-line tools
@@ -116,19 +117,20 @@ jobs:
             result = subprocess.run(['pyinstaller', '--version'], 
                                   capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                print(f'[OK] pyinstaller command - version: {result.stdout.strip()}')
+                print('[OK] pyinstaller command - version:', result.stdout.strip())
             else:
                 print('[ERROR] pyinstaller command failed')
                 all_good = False
         except Exception as e:
-            print(f'[ERROR] pyinstaller command error: {e}')
+            print('[ERROR] pyinstaller command error:', str(e))
             all_good = False
         
         if not all_good:
             print('Some dependencies are missing!')
             sys.exit(1)
         else:
-            print('\\nAll dependencies verified successfully!')
+            print()
+            print('All dependencies verified successfully!')
         "
 
     - name: Show all installed packages
@@ -192,11 +194,11 @@ jobs:
                 
                 # Save as ICO with multiple sizes
                 img.save(str(icon_path), format='ICO', sizes=[(64, 64), (32, 32), (16, 16)])
-                print(f'Created professional icon: {icon_path}')
+                print('Created professional icon:', str(icon_path))
                 
             except ImportError:
                 print('PIL not available, creating minimal icon...')
-                # Create minimal ICO file that won't cause errors
+                # Create minimal ICO file that will not cause errors
                 with open(icon_path, 'wb') as f:
                     # Simple ICO header for 16x16 icon
                     ico_header = bytes([
@@ -215,15 +217,15 @@ jobs:
                     # Write 16x16 RGBA pixel data (blue background)
                     pixel_data = bytes([70, 130, 180, 255] * (16 * 16))  # Blue pixels
                     f.write(pixel_data)
-                print(f'Created minimal icon: {icon_path}')
+                print('Created minimal icon:', str(icon_path))
                 
             except Exception as e:
-                print(f'Icon creation error: {e}')
+                print('Icon creation error:', str(e))
                 # Create empty file to prevent build errors
                 icon_path.touch()
-                print(f'Created placeholder icon: {icon_path}')
+                print('Created placeholder icon:', str(icon_path))
         else:
-            print(f'Icon already exists: {icon_path}')
+            print('Icon already exists:', str(icon_path))
         "
 
     - name: Verify project structure
